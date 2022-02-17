@@ -1,21 +1,27 @@
 import express from 'express';
-import session from 'express-session';
-
-import axios from 'axios';
+import session, { SessionData } from 'express-session';
+import { config as configEnv } from 'dotenv';
 import path from 'path';
 
+import D4HClient from './d4h';
+
+import { OAuth2Client, TokenPayload } from 'google-auth-library';
+
+configEnv({path: './.env.local'});
+
+interface AuthData extends TokenPayload {
+  email: string,
+  d4hId?: string,
+}
 declare module 'express-session' {
   interface SessionData {
-    auth: {
-      email: string,
-      hd: string,
-      picture?: string,
-      name?: string,
-      given_name?: string,
-      family_name?: string,
-    }
+    auth: AuthData
   }
 }
+
+console.log('Auth ClientID: ', process.env.AUTH_CLIENT)
+const authClient = new OAuth2Client(process.env.AUTH_CLIENT)
+const d4hClient = new D4HClient(process.env.D4H_TOKEN)
 
 const app = express();
 const port = 5021; // default port to listen
@@ -29,23 +35,52 @@ app.use(session({
   saveUninitialized:false,
 }))
 
-app.post('/api/login', (req, res) => {
-  const data = req.body;
-  if (!data.userToken) {
-    res.status(400).json({ error: 'must specify userToken' })
+function userFromAuth(ticket?: AuthData) {
+  if (!ticket) return undefined;
+
+  return {
+    name: ticket.name,
+    email: ticket.email,
+    domain: ticket.hd,
+    picture: ticket.picture,
+    //d4hId: ticket.d4hId,
+  }
+}
+
+app.get('/api/boot', (req, res) => {
+  res.json({
+    user: userFromAuth(req.session.auth),
+    config: { clientId: process.env.AUTH_CLIENT }
+  })
+})
+
+app.post("/api/auth/google", async (req, res) => {
+  const { token } = req.body;
+  const ticket = await authClient.verifyIdToken({
+    idToken: token,
+    audience: process.env.CLIENT_ID
+  });
+
+  const payload = ticket.getPayload();
+  if (process.env.ALLOWED_DOMAINS.split(',').indexOf(payload.hd) < 0) {
+    console.log(`${payload.email} from domain ${payload.hd} not allowed`)
+    res.status(403).json({error: 'User not from allowed Google domain' })
+    return
   }
 
-  (async () => {
-    const googleResponse = await axios.get(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${data.userToken}`);
-    console.log(googleResponse.data);
-    if (googleResponse.data.email && googleResponse.data.hd) {
-      req.session.auth = googleResponse.data;
-    }
-    res.send({loggedIn: 'OK'});
-  })();
-});
+  const member = await d4hClient.getMemberFromEmail(payload.email);
 
-app.post('/api/logout', (req, res) => {
+  req.session.auth = {
+    email: '',
+    ...payload,
+    d4hId: member.d4hId,
+  };
+  console.log(`Logged in ${payload.email} D4H:${member.d4hId}`);
+  res.status(200);
+  res.json(userFromAuth(req.session.auth));
+})
+
+app.post('/api/auth/logout', (req, res) => {
   req.session?.destroy(err => {
     if (err) {
       res.status(400).json({ error: 'Unable to log out' })

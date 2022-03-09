@@ -1,19 +1,21 @@
-// import React from 'react';
-// import { useLocalStore } from 'mobx-react';
-import { action, makeObservable, observable, runInAction } from 'mobx';
+import { createTheme } from '@mui/material';
+import { action, computed, makeObservable, observable, runInAction } from 'mobx';
 import { GoogleLoginResponse, GoogleLoginResponseOffline } from 'react-google-login';
-import { Params } from 'react-router-dom';
+import { Location, Params } from 'react-router-dom';
 
 interface SiteConfig {
   clientId: string
 }
 
 class Store {
-  routeParams: Params<string> = {};
+  @observable route: { location: Location, params?: Params<string> } = { location: {
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash,
+    key: '',
+    state: null
+  } };
 
-  updateRouteParams(p: Readonly<import("react-router").Params<string>>) {
-    throw new Error('Method not implemented.');
-  }
   @observable started: boolean = false;
   @observable isOnline: boolean = navigator.onLine;
   @observable user?: any;
@@ -21,6 +23,10 @@ class Store {
   @observable units: { id: string, name: string }[] = [];
 
   @observable config: SiteConfig = { clientId: '' };
+
+  @observable private siteTeam?: { name: string, background: string };
+
+  @observable counter: number = 0;
 
   constructor() {
     makeObservable(this);
@@ -38,11 +44,10 @@ class Store {
       this.units = response.units;
       this.started = true;
 
-      if (response.siteTeam) {
-        document.documentElement.style.setProperty('--brand-background', response.siteTeam.background);
-        document.documentElement.style.setProperty('--brand-color', response.siteTeam.color);
-      }
+      this.siteTeam = response.siteTeam;
     });
+
+    window.setInterval(() => runInAction(() => this.counter = this.counter + 1), 1000);
   }
 
   @action.bound
@@ -94,6 +99,30 @@ class Store {
     });
 
     runInAction(() => this.user = undefined);
+  }
+
+  @computed
+  get currentSection() {
+    if (this.route.location.pathname.startsWith('/events')) return 'events'; 
+    if (this.route.location.pathname.startsWith('/response')) return 'response';
+    return '';
+  }
+
+  @computed
+  get theme() {
+    const t = (
+      {
+        palette: {
+          primary: { main: this.siteTeam?.background ?? '#0000ff' },
+        },
+      }
+    );
+    return createTheme(t);
+  }
+
+  @computed
+  get teamName() {
+    return this.siteTeam?.name ?? 'KCSARA';
   }
 
   private apiFetch(url: string, config?: RequestInit) {

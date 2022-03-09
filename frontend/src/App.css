@@ -1,8 +1,3 @@
-:root {
-  --brand-color: black;
-  --brand-background: white;
-}
-
 html, body, #root {
   display: flex;
   flex: 1 1 auto;

@@ -1467,6 +1467,11 @@
   dependencies:
     "@sinonjs/commons" "^1.7.0"
 
+"@superwf/mobx-react-router@^7.4.0":
+  version "7.4.0"
+  resolved "https://registry.yarnpkg.com/@superwf/mobx-react-router/-/mobx-react-router-7.4.0.tgz#e1d9fa75d9335ee8cd15755242c7716feba174d5"
+  integrity sha512-3Mq3p1mTJPYpDkYzAzhFLBCPqP528pHyu2V3UFSwcGGPUiFqFFmz31RIRYFHF13anQ2joxwrSllKZj0NiLMFpw==
+
 "@surma/rollup-plugin-off-main-thread@^1.1.1":
   version "1.4.2"
   resolved "https://registry.yarnpkg.com/@surma/rollup-plugin-off-main-thread/-/rollup-plugin-off-main-thread-1.4.2.tgz#e6786b6af5799f82f7ab3a82e53f6182d2b91a58"

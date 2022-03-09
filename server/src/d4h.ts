@@ -1,7 +1,12 @@
 import axios, { Axios } from 'axios';
+import { title } from 'process';
 import Member from './models/member';
+import MemberGroup from './models/memberGroup';
+import SARUnit from './models/sarUnit';
 
-export interface D4HMember {
+const GROUP_CACHE_AGE_MINS = 5;
+
+interface D4HMember {
   id: number,
   ref?: string,
   name: string,
@@ -15,9 +20,20 @@ export interface D4HMember {
   }],
 }
 
+interface D4HGroup {
+  id: number,
+  title: string, // "4x4",
+  bundle: string, // "Units"
+  team: number,
+  team_id: number,
+  created_at: string,// "2020-09-17T23:08:54.000Z"
+  updated_at: string, // "2020-09-17T23:08:54.000Z"
+}
+
 class D4HClient {
   d4h: Axios;
-  memberCache: { list: D4HMember[] } = { list: [] };
+  memberCache: { list: D4HMember[], time: number } = { list: [], time: 0 };
+  groupsCache: { list: D4HGroup[], time: number } = { list: [], time: 0 };
 
   constructor(token: string) {
     if (!token) throw new Error('D4H token not specified');
@@ -28,6 +44,25 @@ class D4HClient {
           Authorization: `Bearer ${token}`,
       }
     });
+  }
+
+  async getUnits() :Promise<SARUnit[]> {
+    const groups = await this.ensureGroups();
+    //console.log(groups);
+    const units = groups
+                    .filter(f => f.bundle == 'Units' && f.title !== 'Unaffiliated')
+                    .sort((a,b) => (a.title > b.title) ? 1 : ((b.title > a.title) ? -1 : 0));
+    return units.map(d4h => ({
+      d4hId: d4h.id + '',
+      name: d4h.title,
+    }));
+  }
+
+  async getGroups() :Promise<MemberGroup[]> {
+    return (await this.ensureGroups()).map(g => ({
+      d4hId: g.id + '',
+      name: g.title,
+    }));
   }
 
   async getMemberFromEmail(email: string) :Promise<Member|undefined> {
@@ -45,7 +80,7 @@ class D4HClient {
     })
 
 
-console.log(matches);
+//console.log(matches);
 
     if (matches.length === 1) {
       return {
@@ -73,6 +108,14 @@ console.log(matches);
     } while (chunk.length >= 250);
   
     return list;
+  }
+
+  private async ensureGroups() {
+    if (new Date().getTime() - GROUP_CACHE_AGE_MINS * 60000 > this.groupsCache.time) {
+      this.groupsCache.list = await this.getChunkedList<D4HGroup>('members', 'team/groups');
+      this.groupsCache.time = new Date().getTime();
+    }
+    return this.groupsCache.list;
   }
 }
 
